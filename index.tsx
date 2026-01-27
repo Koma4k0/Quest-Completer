@@ -3,8 +3,11 @@ import "./style.css";
 import { showNotification } from "@api/Notifications";
 import { Logger } from "@utils/Logger";
 import { ModalRoot, ModalSize, openModal } from "@utils/modal";
+import { relaunch } from "@utils/native";
 import definePlugin, { PluginNative } from "@utils/types";
-import { NavigationRouter, React, RestAPI, useEffect, useState, UserStore } from "@webpack/common";
+import { Alerts, NavigationRouter, React, RestAPI, useEffect, useState, UserStore } from "@webpack/common";
+
+import { Commit, GitInfo, GitResult } from "./native";
 
 const Native = VencordNative.pluginHelpers.QuestCompleter as PluginNative<typeof import("./native")>;
 
@@ -118,12 +121,21 @@ function formatTaskType(taskType: string): string {
 
 function RewardMedia({ src, alt }: { src: string; alt: string; }) {
     const isVideo = src.endsWith(".mp4") || src.endsWith(".webm");
-    const style = { width: "48px", height: "48px", borderRadius: "6px", objectFit: "cover" as const, flexShrink: 0 };
+    const baseStyle = { width: "48px", height: "48px", borderRadius: "6px", objectFit: "cover" as const };
+    const wrapperStyle = { flexShrink: 0, alignSelf: "center" as const };
 
     if (isVideo) {
-        return <video src={src} autoPlay loop muted playsInline style={style} />;
+        return (
+            <div style={{ ...wrapperStyle, background: "#000", borderRadius: "6px" }}>
+                <video src={src} autoPlay loop muted playsInline style={{ ...baseStyle, display: "block" }} />
+            </div>
+        );
     }
-    return <img src={src} alt={alt} style={style} />;
+    return (
+        <div style={wrapperStyle}>
+            <img src={src} alt={alt} style={baseStyle} />
+        </div>
+    );
 }
 
 function openQuestPage(onClose?: () => void): void {
@@ -418,6 +430,74 @@ function openQuestCompleterModal() {
     openModal(props => <QuestCompleterModal rootProps={props} />);
 }
 
+let updateError: GitResult | undefined;
+let isOutdated = false;
+let changes: Commit[] = [];
+let repoInfo: GitInfo | undefined;
+
+async function unwrap<T>(p: Promise<GitResult>): Promise<T | undefined> {
+    const res = await p;
+    if (res.ok) return res.value as T;
+    updateError = res;
+    if (res.error) QuestCompleterLogger.error("Update error:", res.error);
+    return undefined;
+}
+
+async function checkForUpdates(): Promise<boolean> {
+    const newChanges = await unwrap<Commit[]>(Native.getNewCommits());
+    if (!newChanges) return isOutdated = false;
+
+    changes = newChanges;
+    return isOutdated = changes.length > 0;
+}
+
+async function doUpdate(): Promise<void> {
+    const res = await Native.update();
+    if (!res.ok) {
+        return Alerts.show({
+            title: "Update Failed",
+            body: `Failed to update Quest Completer: ${res.message || "Unknown error"}`,
+        });
+    }
+
+    if (!(await VencordNative.updater.rebuild()).ok) {
+        return Alerts.show({
+            title: "Build Failed",
+            body: "The build failed. Please try manually rebuilding Vencord.",
+        });
+    }
+
+    Alerts.show({
+        title: "Update Success!",
+        body: "Quest Completer updated successfully. Restart to apply changes?",
+        confirmText: "Restart",
+        cancelText: "Later",
+        onConfirm: () => relaunch(),
+    });
+
+    changes = [];
+    isOutdated = false;
+}
+
+async function checkForUpdatesAndNotify(): Promise<void> {
+    if (IS_WEB) return;
+
+    try {
+        repoInfo = await unwrap<GitInfo>(Native.getRepoInfo());
+        const hasUpdates = await checkForUpdates();
+
+        if (hasUpdates) {
+            setTimeout(() => showNotification({
+                title: "Quest Completer",
+                body: `Update available! ${changes.length} new commit${changes.length > 1 ? "s" : ""}. Click to update.`,
+                onClick: () => doUpdate(),
+            }), 10_000);
+        }
+    } catch (e) {
+        QuestCompleterLogger.error("Failed to check for updates:", e);
+    }
+}
+
 export default definePlugin({
     name: "QuestCompleter",
     description: "Adds modal to automatically complete Discord quests, open it from the vencord toolbox!",
@@ -429,6 +509,7 @@ export default definePlugin({
 
     start() {
         QuestCompleterLogger.info("QuestCompleter started");
+        checkForUpdatesAndNotify();
     },
 
     stop() {
