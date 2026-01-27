@@ -529,7 +529,7 @@ export default definePlugin({
     },
 
     start() {
-        QuestCompleterLogger.info("QuestCompleter started - TEST");
+        QuestCompleterLogger.info("QuestCompleter started");
         checkForUpdatesAndNotify();
     },
 
