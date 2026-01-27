@@ -1,8 +1,10 @@
-import { execFile as cpExecFile, ExecFileOptions } from "node:child_process";
+import { exec as cpExec, ExecOptions } from "node:child_process";
+import { execFile as cpExecFile } from "node:child_process";
 import { IpcMainInvokeEvent } from "electron";
 import { join } from "node:path";
 import { promisify } from "util";
 
+const exec = promisify(cpExec);
 const execFile = promisify(cpExecFile);
 
 const GIST_URL = "https://gist.githubusercontent.com/aamiaa/204cd9d42013ded9faf646fae7f89fbb/raw/CompleteDiscordQuest.md";
@@ -45,11 +47,7 @@ function getPluginRoot(): string {
 const PLUGIN_ROOT = getPluginRoot();
 
 async function git(...args: string[]): Promise<GitResult> {
-    const opts: ExecFileOptions = {
-        cwd: PLUGIN_ROOT,
-        shell: process.platform === "win32" ? "cmd.exe" : true,
-        env: { ...process.env, PATH: process.env.PATH }
-    };
+    const opts: ExecOptions = { cwd: PLUGIN_ROOT };
 
     console.log("[QuestCompleter] Git command:", args, "in dir:", PLUGIN_ROOT);
 
@@ -58,7 +56,9 @@ async function git(...args: string[]): Promise<GitResult> {
         if (isFlatpak) {
             result = await execFile("flatpak-spawn", ["--host", "git", ...args], opts);
         } else {
-            result = await execFile("git", args, { cwd: PLUGIN_ROOT });
+            // Use exec (shell) instead of execFile so git is resolved via PATH
+            const cmd = `git ${args.map(a => `"${a}"`).join(" ")}`;
+            result = await exec(cmd, opts);
         }
 
         console.log("[QuestCompleter] Git result:", result.stdout.trim());
