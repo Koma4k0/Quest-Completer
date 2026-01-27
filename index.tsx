@@ -483,10 +483,31 @@ async function checkForUpdatesAndNotify(): Promise<void> {
     if (IS_WEB) return;
 
     try {
-        repoInfo = await unwrap<GitInfo>(Native.getRepoInfo());
-        const hasUpdates = await checkForUpdates();
+        QuestCompleterLogger.info("Checking for updates...");
 
-        if (hasUpdates) {
+        const repoResult = await Native.getRepoInfo();
+        QuestCompleterLogger.info("getRepoInfo result:", repoResult);
+
+        if (!repoResult.ok) {
+            QuestCompleterLogger.error("Failed to get repo info:", repoResult.message, repoResult.error);
+            return;
+        }
+        repoInfo = repoResult.value;
+
+        const commitsResult = await Native.getNewCommits();
+        QuestCompleterLogger.info("getNewCommits result:", commitsResult);
+
+        if (!commitsResult.ok) {
+            QuestCompleterLogger.error("Failed to get new commits:", commitsResult.message, commitsResult.error);
+            return;
+        }
+
+        changes = commitsResult.value || [];
+        isOutdated = changes.length > 0;
+
+        QuestCompleterLogger.info(`Found ${changes.length} new commits, isOutdated: ${isOutdated}`);
+
+        if (isOutdated) {
             setTimeout(() => showNotification({
                 title: "Quest Completer",
                 body: `Update available! ${changes.length} new commit${changes.length > 1 ? "s" : ""}. Click to update.`,
