@@ -508,11 +508,15 @@ async function checkForUpdatesAndNotify(): Promise<void> {
         QuestCompleterLogger.info(`Found ${changes.length} new commits, isOutdated: ${isOutdated}`);
 
         if (isOutdated) {
-            setTimeout(() => showNotification({
-                title: "Quest Completer",
-                body: `Update available! ${changes.length} new commit${changes.length > 1 ? "s" : ""}. Click to update.`,
-                onClick: () => doUpdate(),
-            }), 10_000);
+            QuestCompleterLogger.info("Showing update notification...");
+            setTimeout(() => {
+                QuestCompleterLogger.info("Notification timeout fired");
+                showNotification({
+                    title: "Quest Completer",
+                    body: `Update available! ${changes.length} new commit${changes.length > 1 ? "s" : ""}. Click to update.`,
+                    onClick: () => doUpdate(),
+                });
+            }, 3_000);
         }
     } catch (e) {
         QuestCompleterLogger.error("Failed to check for updates:", e);
@@ -521,11 +525,11 @@ async function checkForUpdatesAndNotify(): Promise<void> {
 
 export default definePlugin({
     name: "QuestCompleter",
-    description: "Adds modal to automatically complete Discord quests, open it from the vencord toolbox! -test",
+    description: "Adds modal to automatically complete Discord quests, open it from the vencord toolbox!",
     authors: [{ name: "Koma4k", id: 1133030912397938820n }],
 
     toolboxActions: {
-        "Open Quest TEST": openQuestCompleterModal
+        "Open Quest Completer": openQuestCompleterModal
     },
 
     start() {
