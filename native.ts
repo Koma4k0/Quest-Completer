@@ -1,8 +1,10 @@
 import { execFile as cpExecFile, ExecFileOptions } from "node:child_process";
 import { IpcMainInvokeEvent } from "electron";
+import { join } from "node:path";
 import { promisify } from "util";
 
 const execFile = promisify(cpExecFile);
+
 const GIST_URL = "https://gist.githubusercontent.com/aamiaa/204cd9d42013ded9faf646fae7f89fbb/raw/CompleteDiscordQuest.md";
 
 const isFlatpak = process.platform === "linux" && Boolean(process.env.FLATPAK_ID?.includes("discordapp") || process.env.FLATPAK_ID?.includes("Discord"));
@@ -34,7 +36,7 @@ function getPluginRoot(): string {
     // We want: C:\Users\...\Vencord\src\userplugins\questCompleter
     if (__dirname.includes("dist")) {
         const vencordRoot = __dirname.replace(/[\\\/]dist[\\\/]?.*$/, "");
-        return `${vencordRoot}/src/userplugins/questCompleter`;
+        return join(vencordRoot, "src", "userplugins", "questCompleter");
     }
     // If running from source, __dirname is already the plugin folder
     return __dirname;
@@ -43,7 +45,11 @@ function getPluginRoot(): string {
 const PLUGIN_ROOT = getPluginRoot();
 
 async function git(...args: string[]): Promise<GitResult> {
-    const opts: ExecFileOptions = { cwd: PLUGIN_ROOT, shell: true };
+    const opts: ExecFileOptions = {
+        cwd: PLUGIN_ROOT,
+        shell: process.platform === "win32" ? "cmd.exe" : true,
+        env: { ...process.env, PATH: process.env.PATH }
+    };
 
     console.log("[QuestCompleter] Git command:", args, "in dir:", PLUGIN_ROOT);
 
@@ -52,7 +58,7 @@ async function git(...args: string[]): Promise<GitResult> {
         if (isFlatpak) {
             result = await execFile("flatpak-spawn", ["--host", "git", ...args], opts);
         } else {
-            result = await execFile("git", args, opts);
+            result = await execFile("git", args, { cwd: PLUGIN_ROOT });
         }
 
         console.log("[QuestCompleter] Git result:", result.stdout.trim());
