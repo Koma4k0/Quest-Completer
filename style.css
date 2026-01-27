@@ -1,0 +1,17 @@
+.vc-quest-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+
+.vc-quest-scroll::-webkit-scrollbar-track {
+    background: #1E1F22;
+    border-radius: 4px;
+}
+
+.vc-quest-scroll::-webkit-scrollbar-thumb {
+    background: #4E5058;
+    border-radius: 4px;
+}
+
+.vc-quest-scroll::-webkit-scrollbar-thumb:hover {
+    background: #6D6F78;
+}
