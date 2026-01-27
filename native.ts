@@ -42,8 +42,8 @@ const getCwd = async () => {
         const pluginDir = join(VENCORD_USER_PLUGIN_DIR, dir.name);
         const files = await readdir(pluginDir);
 
-        // Look for a unique file in questCompleter to identify the folder
-        if (files.includes("index.tsx") && dir.name.toLowerCase().includes("Quest-")) {
+        // Look for .git folder to find the cloned Quest-Completer repo
+        if (files.includes(".git") && dir.name.toLowerCase().includes("quest")) {
             return pluginDir;
         }
     }
