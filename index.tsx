@@ -511,10 +511,12 @@ async function checkForUpdatesAndNotify(): Promise<void> {
             QuestCompleterLogger.info("Showing update notification...");
             setTimeout(() => {
                 QuestCompleterLogger.info("Notification timeout fired");
-                showNotification({
-                    title: "Quest Completer",
-                    body: `Update available! ${changes.length} new commit${changes.length > 1 ? "s" : ""}. Click to update.`,
-                    onClick: () => doUpdate(),
+                Alerts.show({
+                    title: "Quest Completer Update",
+                    body: `Update available! ${changes.length} new commit${changes.length > 1 ? "s" : ""}.\n\nWould you like to update now?`,
+                    confirmText: "Update",
+                    cancelText: "Later",
+                    onConfirm: () => doUpdate(),
                 });
             }, 3_000);
         }
@@ -529,7 +531,7 @@ export default definePlugin({
     authors: [{ name: "Koma4k", id: 1133030912397938820n }],
 
     toolboxActions: {
-        "Open Quest TEST": openQuestCompleterModal
+        "Open Quest Completer": openQuestCompleterModal
     },
 
     start() {
