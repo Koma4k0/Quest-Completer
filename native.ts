@@ -3,7 +3,7 @@ import { IpcMainInvokeEvent } from "electron";
 import { promisify } from "util";
 
 const execFile = promisify(cpExecFile);
-//updater testing
+
 const GIST_URL = "https://gist.githubusercontent.com/aamiaa/204cd9d42013ded9faf646fae7f89fbb/raw/CompleteDiscordQuest.md";
 
 const isFlatpak = process.platform === "linux" && Boolean(process.env.FLATPAK_ID?.includes("discordapp") || process.env.FLATPAK_ID?.includes("Discord"));
@@ -29,23 +29,24 @@ export interface GitInfo {
     gitHash: string;
 }
 
-function getVencordRoot(): string {
-    // When bundled, __dirname is in dist folder. We need to get back to Vencord root.
+function getPluginRoot(): string {
+    // When bundled, __dirname is in dist folder. We need to get to the plugin source folder.
     // __dirname might be something like: C:\Users\...\Vencord\dist
-    // We want: C:\Users\...\Vencord
+    // We want: C:\Users\...\Vencord\src\userplugins\questCompleter
     if (__dirname.includes("dist")) {
-        return __dirname.replace(/[\\\/]dist[\\\/]?.*$/, "");
+        const vencordRoot = __dirname.replace(/[\\\/]dist[\\\/]?.*$/, "");
+        return `${vencordRoot}/src/userplugins/questCompleter`;
     }
-    // If running from source, go up from src/userplugins/<plugin-folder> to root
-    return __dirname.replace(/[\\\/]src[\\\/]userplugins[\\\/][^\\\/]+[\\\/]?$/, "");
+    // If running from source, __dirname is already the plugin folder
+    return __dirname;
 }
 
-const VENCORD_ROOT = getVencordRoot();
+const PLUGIN_ROOT = getPluginRoot();
 
 async function git(...args: string[]): Promise<GitResult> {
-    const opts: ExecFileOptions = { cwd: VENCORD_ROOT, shell: true };
+    const opts: ExecFileOptions = { cwd: PLUGIN_ROOT, shell: true };
 
-    console.log("[QuestCompleter] Git command:", args, "in dir:", VENCORD_ROOT);
+    console.log("[QuestCompleter] Git command:", args, "in dir:", PLUGIN_ROOT);
 
     try {
         let result;
