@@ -521,7 +521,7 @@ async function checkForUpdatesAndNotify(): Promise<void> {
 
 export default definePlugin({
     name: "QuestCompleter",
-    description: "Adds modal to automatically complete Discord quests, open it from the vencord toolbox!",
+    description: "Adds modal to automatically complete Discord quests, open it from the vencord toolbox! -test",
     authors: [{ name: "Koma4k", id: 1133030912397938820n }],
 
     toolboxActions: {

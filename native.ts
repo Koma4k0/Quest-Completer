@@ -3,7 +3,6 @@ import { IpcMainInvokeEvent } from "electron";
 import { promisify } from "util";
 
 const execFile = promisify(cpExecFile);
-
 const GIST_URL = "https://gist.githubusercontent.com/aamiaa/204cd9d42013ded9faf646fae7f89fbb/raw/CompleteDiscordQuest.md";
 
 const isFlatpak = process.platform === "linux" && Boolean(process.env.FLATPAK_ID?.includes("discordapp") || process.env.FLATPAK_ID?.includes("Discord"));
