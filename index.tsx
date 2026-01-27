@@ -531,7 +531,7 @@ export default definePlugin({
     authors: [{ name: "Koma4k", id: 1133030912397938820n }],
 
     toolboxActions: {
-        "Open Quest TEST": openQuestCompleterModal
+        "Open Quest Completer": openQuestCompleterModal
     },
 
     start() {
