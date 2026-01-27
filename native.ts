@@ -1,10 +1,9 @@
-import { exec as cpExec, ExecOptions } from "node:child_process";
-import { execFile as cpExecFile } from "node:child_process";
+import { execFile as cpExecFile, ExecFileOptions } from "node:child_process";
 import { IpcMainInvokeEvent } from "electron";
-import { join } from "node:path";
+import { readdir } from "fs/promises";
+import { join } from "path";
 import { promisify } from "util";
 
-const exec = promisify(cpExec);
 const execFile = promisify(cpExecFile);
 
 const GIST_URL = "https://gist.githubusercontent.com/aamiaa/204cd9d42013ded9faf646fae7f89fbb/raw/CompleteDiscordQuest.md";
@@ -32,33 +31,37 @@ export interface GitInfo {
     gitHash: string;
 }
 
-function getPluginRoot(): string {
-    // When bundled, __dirname is in dist folder. We need to get to the plugin source folder.
-    // __dirname might be something like: C:\Users\...\Vencord\dist
-    // We want: C:\Users\...\Vencord\src\userplugins\questCompleter
-    if (__dirname.includes("dist")) {
-        const vencordRoot = __dirname.replace(/[\\\/]dist[\\\/]?.*$/, "");
-        return join(vencordRoot, "src", "userplugins", "questCompleter");
-    }
-    // If running from source, __dirname is already the plugin folder
-    return __dirname;
-}
+const VENCORD_USER_PLUGIN_DIR = join(__dirname, "..", "src", "userplugins");
 
-const PLUGIN_ROOT = getPluginRoot();
+const getCwd = async () => {
+    const dirs = await readdir(VENCORD_USER_PLUGIN_DIR, { withFileTypes: true });
+
+    for (const dir of dirs) {
+        if (!dir.isDirectory()) continue;
+
+        const pluginDir = join(VENCORD_USER_PLUGIN_DIR, dir.name);
+        const files = await readdir(pluginDir);
+
+        // Look for a unique file in questCompleter to identify the folder
+        if (files.includes("index.tsx") && dir.name.toLowerCase().includes("Quest-")) {
+            return pluginDir;
+        }
+    }
+
+    return;
+};
 
 async function git(...args: string[]): Promise<GitResult> {
-    const opts: ExecOptions = { cwd: PLUGIN_ROOT };
+    const opts: ExecFileOptions = { cwd: await getCwd(), shell: true };
 
-    console.log("[QuestCompleter] Git command:", args, "in dir:", PLUGIN_ROOT);
+    console.log("[QuestCompleter] Git command:", args, "in dir:", opts.cwd);
 
     try {
         let result;
         if (isFlatpak) {
             result = await execFile("flatpak-spawn", ["--host", "git", ...args], opts);
         } else {
-            // Use exec (shell) instead of execFile so git is resolved via PATH
-            const cmd = `git ${args.map(a => `"${a}"`).join(" ")}`;
-            result = await exec(cmd, opts);
+            result = await execFile("git", args, opts);
         }
 
         console.log("[QuestCompleter] Git result:", result.stdout.trim());
