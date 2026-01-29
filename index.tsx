@@ -1,15 +1,173 @@
 import "./style.css";
 
 import { showNotification } from "@api/Notifications";
+import { addServerListElement, removeServerListElement, ServerListRenderPosition } from "@api/ServerList";
+import { ErrorBoundary } from "@components/index";
 import { Logger } from "@utils/Logger";
 import { ModalRoot, ModalSize, openModal } from "@utils/modal";
 import { relaunch } from "@utils/native";
-import definePlugin, { PluginNative } from "@utils/types";
+import definePlugin, { PluginNative, StartAt } from "@utils/types";
+import { findComponentByCodeLazy } from "@webpack";
 import { Alerts, NavigationRouter, React, RestAPI, useEffect, useState, UserStore } from "@webpack/common";
+import { JSX } from "react";
 
 import { Commit, GitInfo, GitResult } from "./native";
 
 const Native = VencordNative.pluginHelpers.QuestCompleter as PluginNative<typeof import("./native")>;
+
+// Server list components for sidebar button
+const GuildlessServerListItemComponent = findComponentByCodeLazy("tooltip:", "lowerBadgeSize:");
+const GuildedServerListItemPillComponent = findComponentByCodeLazy('"pill":"empty"');
+// Custom badge component since Vencord's is broken
+function CustomBadge({ count, color = "var(--status-danger)" }: { count: number; color?: string; }): JSX.Element | null {
+    if (count <= 0) return null;
+    const displayText = count > 99 ? "99+" : String(count);
+    return (
+        <div className="vc-quest-completer-badge" style={{ backgroundColor: color }}>
+            {displayText}
+        </div>
+    );
+}
+
+// State for quest count updates
+let questCountUpdateInterval: NodeJS.Timeout | null = null;
+let currentQuestCount = 0;
+let rerenderCallback: (() => void) | null = null;
+
+function getAvailableQuestCount(): number {
+    const quests = getQuestInfo();
+    return quests.filter(q => !q.isClaimed).length;
+}
+
+function formatLowerBadge(count: number, maxDigits: number = 2): [string, number] {
+    const maxValue = Math.pow(10, maxDigits) - 1;
+    const displayText = count > maxValue ? `${maxValue}+` : `${count}`;
+    const width = displayText.length <= 1 ? 16 : displayText.length <= 2 ? 22 : 30;
+    return [displayText, width];
+}
+
+interface ServerListItemLowerBadgeProps {
+    count: number;
+    className?: string;
+    color?: string;
+    style?: React.CSSProperties;
+    maxDigits?: number;
+}
+
+function QuestIcon(height: number, width: number, className?: string): JSX.Element {
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            height={height}
+            width={width}
+            fill="none"
+            className={className}
+        >
+            <path fill="currentColor" d="M7.5 21.7a8.95 8.95 0 0 1 9 0 1 1 0 0 0 1-1.73c-.6-.35-1.24-.64-1.9-.87.54-.3 1.05-.65 1.52-1.07a3.98 3.98 0 0 0 5.49-1.8.77.77 0 0 0-.24-.95 3.98 3.98 0 0 0-2.02-.76A4 4 0 0 0 23 10.47a.76.76 0 0 0-.71-.71 4.06 4.06 0 0 0-1.6.22 3.99 3.99 0 0 0 .54-5.35.77.77 0 0 0-.95-.24c-.75.36-1.37.95-1.77 1.67V6a4 4 0 0 0-4.9-3.9.77.77 0 0 0-.6.72 4 4 0 0 0 3.7 4.17c.89 1.3 1.3 2.95 1.3 4.51 0 3.66-2.75 6.5-6 6.5s-6-2.84-6-6.5c0-1.56.41-3.21 1.3-4.51A4 4 0 0 0 11 2.82a.77.77 0 0 0-.6-.72 4.01 4.01 0 0 0-4.9 3.96A4.02 4.02 0 0 0 3.73 4.4a.77.77 0 0 0-.95.24 3.98 3.98 0 0 0 .55 5.35 4 4 0 0 0-1.6-.22.76.76 0 0 0-.72.71l-.01.28a4 4 0 0 0 2.65 3.77c-.75.06-1.45.33-2.02.76-.3.22-.4.62-.24.95a4 4 0 0 0 5.49 1.8c.47.42.98.78 1.53 1.07-.67.23-1.3.52-1.91.87a1 1 0 1 0 1 1.73Z" />
+        </svg>
+    );
+}
+
+interface GuildlessServerListItemProps {
+    id?: string;
+    className?: string;
+    icon?: JSX.Element;
+    tooltip?: string;
+    showPill?: boolean;
+    isVisible?: boolean;
+    isSelected?: boolean;
+    hasUnread?: boolean;
+    lowerBadgeProps?: ServerListItemLowerBadgeProps;
+    onClick?: ((e: React.MouseEvent) => void);
+}
+
+function GuildlessServerListItem({
+    id,
+    className = "vc-quest-completer",
+    icon,
+    tooltip,
+    showPill = true,
+    isVisible = true,
+    isSelected = false,
+    hasUnread = false,
+    lowerBadgeProps,
+    onClick
+}: GuildlessServerListItemProps): JSX.Element {
+    const [hovered, setHovered] = useState(false);
+
+    const badgeCount = lowerBadgeProps?.count ?? 0;
+
+    const wrappedIcon = icon ? (
+        <div className={`${className}-icon-container`}>
+            {icon}
+        </div>
+    ) : undefined;
+
+    const componentProps: Record<string, any> = {
+        ...(wrappedIcon && { icon: () => wrappedIcon }),
+        ...(tooltip !== undefined && { tooltip }),
+        ...(onClick !== undefined && { onClick }),
+    };
+
+    return (
+        <ErrorBoundary>
+            {isVisible && (
+                <div {...(id !== undefined ? { id } : {})} className={`${className}-container`}>
+                    <div className={`${className}-pill-container`}>
+                        <GuildedServerListItemPillComponent
+                            unread={hasUnread && showPill}
+                            selected={isSelected && showPill}
+                            hovered={hovered && showPill}
+                            className={`${className}-pill${isSelected ? " selected" : hovered ? " hovered" : ""}`}
+                        />
+                    </div>
+                    <div className={`${className}-server-list-button-container`}>
+                        <GuildlessServerListItemComponent
+                            showPill={false}
+                            selected={isSelected}
+                            className={`${className}-button`}
+                            onMouseEnter={() => setHovered(true)}
+                            onMouseLeave={() => setHovered(false)}
+                            {...componentProps}
+                        />
+                        <CustomBadge count={badgeCount} color={lowerBadgeProps?.color} />
+                    </div>
+                </div>
+            )}
+        </ErrorBoundary>
+    );
+}
+
+function QuestCompleterButton(): JSX.Element {
+    const [questCount, setQuestCount] = useState(getAvailableQuestCount());
+
+    useEffect(() => {
+        rerenderCallback = () => setQuestCount(getAvailableQuestCount());
+        return () => { rerenderCallback = null; };
+    }, []);
+
+    const lowerBadgeProps = {
+        count: questCount,
+        maxDigits: 2,
+        color: "var(--status-danger)",
+        style: { color: "white" }
+    };
+
+    return (
+        <GuildlessServerListItem
+            id="vc-quest-completer-button"
+            className="vc-quest-completer"
+            icon={QuestIcon(26, 26)}
+            tooltip="Quest Completer"
+            showPill={true}
+            isVisible={true}
+            isSelected={false}
+            hasUnread={questCount > 0}
+            lowerBadgeProps={lowerBadgeProps}
+            onClick={openQuestCompleterModal}
+        />
+    );
+}
 
 const QuestCompleterLogger = new Logger("QuestCompleter");
 
@@ -527,19 +685,42 @@ async function checkForUpdatesAndNotify(): Promise<void> {
 
 export default definePlugin({
     name: "QuestCompleter",
-    description: "Adds modal to automatically complete Discord quests, open it from the vencord toolbox!",
+    description: "Adds a sidebar button to automatically complete Discord quests with a badge showing available quest count.",
     authors: [{ name: "Koma4k", id: 1133030912397938820n }],
+    dependencies: ["ServerListAPI"],
+    startAt: StartAt.Init, // Load early to position above ReadAllNotificationsButton
 
-    toolboxActions: {
-        "Open Quest Completer": openQuestCompleterModal
-    },
+    renderQuestCompleterButton: ErrorBoundary.wrap(QuestCompleterButton, { noop: true }),
 
     start() {
         QuestCompleterLogger.info("QuestCompleter started");
+        addServerListElement(ServerListRenderPosition.Above, this.renderQuestCompleterButton);
+
+        // Trigger immediate update after a short delay to let Discord load
+        setTimeout(() => {
+            currentQuestCount = getAvailableQuestCount();
+            rerenderCallback?.();
+        }, 1000);
+
+        // Update quest count periodically (every 5 seconds)
+        questCountUpdateInterval = setInterval(() => {
+            const newCount = getAvailableQuestCount();
+            if (newCount !== currentQuestCount) {
+                currentQuestCount = newCount;
+                rerenderCallback?.();
+            }
+        }, 5000);
+
         checkForUpdatesAndNotify();
     },
 
     stop() {
         QuestCompleterLogger.info("QuestCompleter stopped");
+        removeServerListElement(ServerListRenderPosition.Above, this.renderQuestCompleterButton);
+
+        if (questCountUpdateInterval) {
+            clearInterval(questCountUpdateInterval);
+            questCountUpdateInterval = null;
+        }
     }
 });

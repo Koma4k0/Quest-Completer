@@ -15,3 +15,66 @@
 .vc-quest-scroll::-webkit-scrollbar-thumb:hover {
     background: #6D6F78;
 }
+
+/* Quest Completer Sidebar Button Styles */
+.vc-quest-completer-container {
+    position: relative;
+}
+
+.vc-quest-completer-pill-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    pointer-events: none;
+}
+
+.vc-quest-completer-pill > [class*="item"] {
+    will-change: transform;
+    max-height: 8px;
+    min-height: 8px;
+    transition: max-height 0.2s ease-in-out;
+}
+
+.vc-quest-completer-pill.hovered > [class*="item"] {
+    max-height: 20px;
+}
+
+.vc-quest-completer-pill.selected > [class*="item"] {
+    max-height: 40px;
+}
+
+.vc-quest-completer-server-list-button-container {
+    position: relative;
+}
+
+.vc-quest-completer-icon-container {
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+/* Custom badge for quest count */
+.vc-quest-completer-badge {
+    position: absolute;
+    bottom: 0px;
+    right: 16px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background-color: var(--status-danger);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    pointer-events: none;
+    z-index: 100;
+    border: 2px solid var(--background-tertiary);
+}
