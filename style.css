@@ -77,4 +77,67 @@
     pointer-events: none;
     z-index: 100;
     border: 2px solid var(--background-tertiary);
+<<<<<<< HEAD
+=======
+}
+
+/* Animations and hover effects */
+.vc-quest-btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--interactive-normal);
+    font-size: 15px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+    flex-shrink: 0;
+}
+
+.vc-quest-btn-icon:hover {
+    background: var(--background-modifier-hover);
+    color: var(--interactive-hover);
+    transform: scale(1.08);
+}
+
+.vc-quest-btn-icon:active {
+    background: var(--background-modifier-active);
+    color: var(--interactive-active);
+    transform: scale(0.93);
+}
+
+@keyframes spin-refresh {
+    from {
+        transform: rotate(0deg) scale(1.08);
+    }
+
+    to {
+        transform: rotate(360deg) scale(1.08);
+    }
+}
+
+.vc-quest-btn-icon.spinning {
+    animation: spin-refresh 0.4s ease-in-out;
+}
+
+.vc-quest-action-btn {
+    transition: all 0.2s ease-in-out;
+}
+
+.vc-quest-action-btn:not(:disabled):hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.vc-quest-action-btn:not(:disabled):active {
+    transform: translateY(0);
+    filter: brightness(0.9);
+    box-shadow: none;
+>>>>>>> 3d5d72e (Update Plugin to support new Quests)
 }

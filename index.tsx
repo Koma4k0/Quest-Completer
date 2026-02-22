@@ -174,6 +174,8 @@ const QuestCompleterLogger = new Logger("QuestCompleter");
 interface QuestInfo {
     id: string;
     questName: string;
+    applicationId: string;
+    activityAppId: string | null;
     applicationName: string;
     taskType: string;
     secondsNeeded: number;
@@ -186,7 +188,7 @@ interface QuestInfo {
     rewardImage: string | null;
 }
 
-const SUPPORTED_TASKS = ["WATCH_VIDEO", "PLAY_ON_DESKTOP", "STREAM_ON_DESKTOP", "PLAY_ACTIVITY", "WATCH_VIDEO_ON_MOBILE"];
+const SUPPORTED_TASKS = ["WATCH_VIDEO", "PLAY_ON_DESKTOP", "STREAM_ON_DESKTOP", "PLAY_ACTIVITY", "WATCH_VIDEO_ON_MOBILE", "LAUNCH_ACTIVITY", "ACHIEVEMENT_IN_ACTIVITY"];
 
 function getQuestInfo(): QuestInfo[] {
     try {
@@ -229,9 +231,15 @@ function getQuestInfo(): QuestInfo[] {
 
             QuestCompleterLogger.info(`Quest ${quest.id} reward:`, { rewardName, rewardAsset, reward });
 
+            const activityAppId = taskName === "ACHIEVEMENT_IN_ACTIVITY"
+                ? (quest.config.taskConfigV2?.tasks?.ACHIEVEMENT_IN_ACTIVITY?.applications?.[0]?.id ?? quest.config.application.id)
+                : null;
+
             return {
                 id: quest.id,
                 questName: quest.config.messages.questName,
+                applicationId: quest.config.application.id,
+                activityAppId,
                 applicationName: quest.config.application.name,
                 taskType: taskName,
                 secondsNeeded,
@@ -272,7 +280,9 @@ function formatTaskType(taskType: string): string {
         "PLAY_ON_DESKTOP": "Play Game",
         "STREAM_ON_DESKTOP": "Stream Game",
         "PLAY_ACTIVITY": "Play Activity",
-        "WATCH_VIDEO_ON_MOBILE": "Watch Video (Mobile)"
+        "WATCH_VIDEO_ON_MOBILE": "Watch Video (Mobile)",
+        "LAUNCH_ACTIVITY": "Launch Activity",
+        "ACHIEVEMENT_IN_ACTIVITY": "In-Game Achievement"
     };
     return mapping[taskType] || taskType;
 }
@@ -334,13 +344,35 @@ async function enrollInQuest(questId: string): Promise<boolean> {
 
 async function fetchAndRunScript(): Promise<void> {
     try {
-        QuestCompleterLogger.info("Fetching quest completer script...");
+        const questsToComplete = getQuestInfo().filter(q => q.isEnrolled && !q.isCompleted);
+        const needsExternalScript = questsToComplete.some(q => q.taskType !== "ACHIEVEMENT_IN_ACTIVITY");
 
-        const script = await Native.fetchQuestScript();
+        if (needsExternalScript) {
+            const script = await Native.fetchQuestScript();
+            QuestCompleterLogger.info("Running external quest completer script...");
+            eval(script);
+        }
 
-        QuestCompleterLogger.info("Running quest completer script...");
-
-        eval(script);
+        const achievementQuests = questsToComplete.filter(q => q.taskType === "ACHIEVEMENT_IN_ACTIVITY");
+        for (const quest of achievementQuests) {
+            QuestCompleterLogger.info(`Completing ACHIEVEMENT_IN_ACTIVITY quest: ${quest.questName}`);
+            const appID = quest.activityAppId ?? quest.applicationId;
+            let authCode: string | null = null;
+            try {
+                const response = await RestAPI.post({
+                    url: `/oauth2/authorize?client_id=${appID}&response_type=code&scope=identify%20applications.entitlements&state=`,
+                    body: { authorize: true }
+                });
+                const location = response?.body?.location;
+                if (location) authCode = new URL(location).searchParams.get("code");
+            } catch (e) {
+                throw new Error(`Failed to get auth code for quest ${quest.questName}: ${e}`);
+            }
+            if (!authCode) throw new Error(`No auth code returned for quest ${quest.questName}`);
+            const result = await Native.completeAchievementQuest(appID, authCode, quest.secondsNeeded);
+            if (!result.success) throw new Error(`Failed to complete quest ${quest.questName}: ${result.error}`);
+            QuestCompleterLogger.info(`ACHIEVEMENT_IN_ACTIVITY quest completed: ${quest.questName}`);
+        }
 
         showNotification({
             title: "Quest Completer",
@@ -364,6 +396,7 @@ function QuestCompleterModal({ rootProps }: { rootProps: any; }) {
     const [quests, setQuests] = useState<QuestInfo[]>([]);
     const [isRunning, setIsRunning] = useState(false);
     const [enrollingId, setEnrollingId] = useState<string | null>(null);
+    const [isSpinning, setIsSpinning] = useState(false);
 
     useEffect(() => {
         setQuests(getQuestInfo());
@@ -417,8 +450,16 @@ function QuestCompleterModal({ rootProps }: { rootProps: any; }) {
                         <div style={{ color: "#FFFFFF", fontSize: "16px", fontWeight: 600 }}>Quest Completer</div>
                         <div style={{ color: "#B5BAC1", fontSize: "11px" }}>{availableQuests.length} quest{availableQuests.length !== 1 ? "s" : ""} available</div>
                     </div>
-                    <button onClick={handleRefresh} style={{ background: "transparent", border: "none", color: "#B5BAC1", cursor: "pointer", fontSize: "16px", padding: "4px" }} title="Refresh">↻</button>
-                    <button onClick={rootProps.onClose} style={{ background: "transparent", border: "none", color: "#B5BAC1", cursor: "pointer", fontSize: "16px", padding: "4px" }}>✕</button>
+                    <button
+                        className={`vc-quest-btn-icon${isSpinning ? " spinning" : ""}`}
+                        title="Refresh"
+                        onClick={() => {
+                            setIsSpinning(true);
+                            handleRefresh();
+                            setTimeout(() => setIsSpinning(false), 400);
+                        }}
+                    >↻</button>
+                    <button className="vc-quest-btn-icon" title="Close" onClick={rootProps.onClose}>✕</button>
                 </div>
                 <div className="vc-quest-scroll" style={{ maxHeight: "60vh", overflowY: "auto" }}>
 
@@ -475,6 +516,7 @@ function QuestCompleterModal({ rootProps }: { rootProps: any; }) {
                                                         </div>
                                                         {isComplete && (
                                                             <button
+                                                                className="vc-quest-action-btn"
                                                                 onClick={(e) => { e.stopPropagation(); openQuestPage(rootProps.onClose); }}
                                                                 style={{ width: "100%", marginTop: "8px", padding: "6px 10px", background: "#248046", border: "none", borderRadius: "4px", color: "#FFFFFF", fontSize: "12px", fontWeight: 500, cursor: "pointer" }}
                                                             >
@@ -528,6 +570,7 @@ function QuestCompleterModal({ rootProps }: { rootProps: any; }) {
                                                             {Math.floor(quest.secondsNeeded / 60)} min required
                                                         </div>
                                                         <button
+                                                            className="vc-quest-action-btn"
                                                             onClick={() => handleEnroll(quest.id)}
                                                             disabled={isEnrolling}
                                                             style={{
@@ -557,6 +600,7 @@ function QuestCompleterModal({ rootProps }: { rootProps: any; }) {
                 </div>
 
                 <button
+                    className="vc-quest-action-btn"
                     onClick={handleRunScript}
                     disabled={isRunning || enrolledQuests.length === 0}
                     style={{

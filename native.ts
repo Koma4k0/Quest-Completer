@@ -1,6 +1,6 @@
 import { execFile as cpExecFile, ExecFileOptions } from "node:child_process";
 import { IpcMainInvokeEvent } from "electron";
-import { readdir } from "fs/promises";
+import { readdir, readFile } from "fs/promises";
 import { join } from "path";
 import { promisify } from "util";
 
@@ -146,4 +146,47 @@ export async function fetchQuestScript(_: IpcMainInvokeEvent): Promise<string> {
     } catch (e) {
         throw new Error(`Failed to fetch quest script: ${e}`);
     }
+}
+
+export async function completeAchievementQuest(_: IpcMainInvokeEvent, appID: string, authCode: string, questTarget: number): Promise<{ success: boolean; error: string | null; }> {
+    const authResult = await authorizeAchievementQuest(appID, authCode);
+
+    if (authResult.error || !authResult.token) {
+        return { success: false, error: JSON.stringify(authResult.error) };
+    }
+
+    const progressResult = await reportAchievementQuestProgress(appID, authResult.token, questTarget);
+
+    if (progressResult.error || !progressResult.success) {
+        return { success: false, error: JSON.stringify(progressResult.error) };
+    }
+
+    return { success: true, error: null };
+}
+
+async function authorizeAchievementQuest(appID: string, authCode: string): Promise<{ token: string | false; error: any; }> {
+    let error = null;
+
+    const token = await fetch(`https://${appID}.discordsays.com/.proxy/acf/authorize`, {
+        body: JSON.stringify({ code: authCode }),
+        method: "POST",
+        mode: "cors",
+        credentials: "include"
+    }).then(res => res.json()).then(data => data.token).catch((e) => { error = e; return ""; });
+
+    return { token, error };
+}
+
+async function reportAchievementQuestProgress(appID: string, token: string, questTarget: number): Promise<{ success: boolean; error: any; }> {
+    let error = null;
+
+    const success = await fetch(`https://${appID}.discordsays.com/.proxy/acf/quest/progress`, {
+        headers: { "x-auth-token": token },
+        body: JSON.stringify({ progress: questTarget }),
+        method: "POST",
+        mode: "cors",
+        credentials: "include"
+    }).then(res => res.ok).catch((e) => { error = e; return false; });
+
+    return { success, error };
 }
